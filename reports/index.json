@@ -1,0 +1,14 @@
+[
+  {
+    "id": "2026-04-14T10-37-24Z_gpt-oss-120b",
+    "timestamp": "2026-04-14T10:37:24.596601+00:00",
+    "mode": "solo",
+    "models": [
+      "gpt-oss-120b"
+    ],
+    "judge": "glm-4.7",
+    "cases_count": 12,
+    "avg_score": 4.55,
+    "avg_latency": 2.47
+  }
+]
