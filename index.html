@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ChatADC Evaluation Report</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #12151a;
+    --panel-2: #171b22;
+    --border: #232832;
+    --text: #e7ecf3;
+    --muted: #8a94a6;
+    --accent: #7c5cff;
+    --ok: #34d399;
+    --warn: #fbbf24;
+    --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Inter, sans-serif; }
+  a { color: var(--accent); text-decoration: none; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 20px 80px; }
+  header { display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px;
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+  .grid { display: grid; gap: 12px; margin: 20px 0;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .card .value { font-size: 22px; font-weight: 600; margin-top: 4px; }
+  .section-title { margin: 28px 0 10px; font-size: 13px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.08em; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border);
+    vertical-align: top; }
+  th { background: var(--panel-2); font-weight: 600; font-size: 12px;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  tr:last-child td { border-bottom: none; }
+  .score { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .dot.warn { background: var(--warn); }
+  .dot.bad { background: var(--bad); }
+  .prompt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px; color: var(--text); }
+  .reasoning { color: var(--muted); font-size: 13px; }
+  .meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  footer { margin-top: 40px; color: var(--muted); font-size: 12px; text-align: center; }
+  .bar { height: 6px; background: var(--panel-2); border-radius: 99px; overflow: hidden; width: 100%; }
+  .bar > div { height: 100%; background: linear-gradient(90deg, var(--accent), #34d399); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>ChatADC Evaluation Report</h1>
+        <div class="sub">Solo-mode LLM-as-judge results · <span id="date"></span></div>
+      </div>
+      <div>
+        <span class="pill" id="mode-pill">mode: solo</span>
+        <span class="pill" id="judge-pill">judge: glm-4.7</span>
+      </div>
+    </header>
+
+    <div class="grid" id="stats"></div>
+
+    <div class="section-title">Model performance</div>
+    <table id="models-table">
+      <thead>
+        <tr><th>Model</th><th>Avg Score</th><th>Avg Latency</th><th>Avg Tokens</th><th>Cases</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="section-title">Cases</div>
+    <table id="cases-table">
+      <thead>
+        <tr><th>ID</th><th>Prompt</th><th>Model</th><th>Score</th><th>Reasoning</th><th>Perf</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <footer>Generated from <code>eval_results.json</code></footer>
+  </div>
+
+<script>
+async function loadData() {
+  const res = await fetch("eval_results.json", { cache: "no-store" });
+  return res.json();
+}
+
+function scoreClass(s) {
+  if (s >= 4) return "";
+  if (s >= 3) return "warn";
+  return "bad";
+}
+
+function render(data) {
+  document.getElementById("date").textContent = new Date().toISOString().slice(0, 10);
+
+  const total = data.length;
+  const avgScore = data.reduce((a, r) => a + (r.score || 0), 0) / Math.max(total, 1);
+  const avgLat = data.reduce((a, r) => a + (r.latency || 0), 0) / Math.max(total, 1);
+  const avgTok = data.reduce((a, r) => a + (r.tokens || 0), 0) / Math.max(total, 1);
+  const models = [...new Set(data.map(r => r.model))];
+
+  const stats = document.getElementById("stats");
+  stats.innerHTML = `
+    <div class="card"><div class="label">Cases</div><div class="value">${total}</div></div>
+    <div class="card"><div class="label">Models</div><div class="value">${models.length}</div></div>
+    <div class="card"><div class="label">Avg Score</div><div class="value">${avgScore.toFixed(2)} / 5</div>
+      <div class="bar" style="margin-top:8px"><div style="width:${(avgScore/5*100).toFixed(0)}%"></div></div>
+    </div>
+    <div class="card"><div class="label">Avg Latency</div><div class="value">${avgLat.toFixed(2)}s</div></div>
+    <div class="card"><div class="label">Avg Tokens</div><div class="value">${avgTok.toFixed(0)}</div></div>
+  `;
+
+  const mbody = document.querySelector("#models-table tbody");
+  mbody.innerHTML = models.map(m => {
+    const rows = data.filter(r => r.model === m);
+    const s = rows.reduce((a, r) => a + r.score, 0) / rows.length;
+    const l = rows.reduce((a, r) => a + r.latency, 0) / rows.length;
+    const t = rows.reduce((a, r) => a + r.tokens, 0) / rows.length;
+    return `<tr>
+      <td><strong>${m}</strong></td>
+      <td><span class="score"><span class="dot ${scoreClass(s)}"></span>${s.toFixed(2)} / 5</span></td>
+      <td class="meta">${l.toFixed(2)}s</td>
+      <td class="meta">${t.toFixed(0)}</td>
+      <td class="meta">${rows.length}</td>
+    </tr>`;
+  }).join("");
+
+  const cbody = document.querySelector("#cases-table tbody");
+  cbody.innerHTML = data.map(r => `
+    <tr>
+      <td class="meta">${r.id}</td>
+      <td class="prompt">${escapeHtml(r.prompt)}</td>
+      <td>${r.model}</td>
+      <td><span class="score"><span class="dot ${scoreClass(r.score)}"></span>${r.score}/5</span></td>
+      <td class="reasoning">${escapeHtml(r.reasoning || "")}</td>
+      <td class="meta">${r.latency}s<br/>${r.tokens} tok</td>
+    </tr>
+  `).join("");
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+
+loadData().then(render).catch(err => {
+  document.querySelector(".wrap").insertAdjacentHTML("beforeend",
+    `<p style="color:var(--bad)">Failed to load eval_results.json: ${err.message}</p>`);
+});
+</script>
+</body>
+</html>
