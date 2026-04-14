@@ -52,6 +52,10 @@
   footer { margin-top: 40px; color: var(--muted); font-size: 12px; text-align: center; }
   .bar { height: 6px; background: var(--panel-2); border-radius: 99px; overflow: hidden; width: 100%; }
   .bar > div { height: 100%; background: linear-gradient(90deg, var(--accent), #34d399); }
+  .axes { display: flex; flex-wrap: wrap; gap: 6px; }
+  .axis { font-size: 11px; padding: 2px 8px; border-radius: 99px;
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
+  .axis b { color: var(--text); font-weight: 600; margin-left: 4px; }
 </style>
 </head>
 <body>
@@ -77,10 +81,16 @@
       <tbody></tbody>
     </table>
 
+    <div class="section-title">Axis averages</div>
+    <table id="axes-table">
+      <thead><tr><th>Axis</th><th>Avg</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+
     <div class="section-title">Cases</div>
     <table id="cases-table">
       <thead>
-        <tr><th>ID</th><th>Prompt</th><th>Model</th><th>Score</th><th>Reasoning</th><th>Perf</th></tr>
+        <tr><th>ID</th><th>Prompt</th><th>Model</th><th>Overall</th><th>Axes</th><th>Reasoning</th><th>Perf</th></tr>
       </thead>
       <tbody></tbody>
     </table>
@@ -135,17 +145,34 @@ function render(data) {
     </tr>`;
   }).join("");
 
+  const axisNames = [...new Set(data.flatMap(r => Object.keys(r.axes || {})))];
+  const abody = document.querySelector("#axes-table tbody");
+  abody.innerHTML = axisNames.map(a => {
+    const vals = data.map(r => (r.axes || {})[a]).filter(v => typeof v === "number" && v > 0);
+    const avg = vals.length ? vals.reduce((x, y) => x + y, 0) / vals.length : 0;
+    return `<tr>
+      <td>${a.replace(/_/g, " ")}</td>
+      <td><span class="score"><span class="dot ${scoreClass(avg)}"></span>${avg.toFixed(2)} / 5</span></td>
+      <td style="width:50%"><div class="bar"><div style="width:${(avg/5*100).toFixed(0)}%"></div></div></td>
+    </tr>`;
+  }).join("");
+
   const cbody = document.querySelector("#cases-table tbody");
-  cbody.innerHTML = data.map(r => `
+  cbody.innerHTML = data.map(r => {
+    const axes = r.axes || {};
+    const axesHtml = Object.entries(axes).map(([k, v]) =>
+      `<span class="axis">${k.replace(/_/g, " ")}<b>${v}</b></span>`).join("");
+    return `
     <tr>
       <td class="meta">${r.id}</td>
       <td class="prompt">${escapeHtml(r.prompt)}</td>
       <td>${r.model}</td>
       <td><span class="score"><span class="dot ${scoreClass(r.score)}"></span>${r.score}/5</span></td>
+      <td><div class="axes">${axesHtml}</div></td>
       <td class="reasoning">${escapeHtml(r.reasoning || "")}</td>
       <td class="meta">${r.latency}s<br/>${r.tokens} tok</td>
-    </tr>
-  `).join("");
+    </tr>`;
+  }).join("");
 }
 
 function escapeHtml(s) {
